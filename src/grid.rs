@@ -11,8 +11,8 @@ struct Cell {
 
 pub struct Grid {
     cells: Vec<Vec<Cell>>,
-    largeur: usize,
-    hauteur: usize,
+    width: usize,
+    height: usize,
     initialized: bool
 }
 
@@ -27,28 +27,23 @@ impl Cell {
 }
 
 impl Grid {
-    pub fn new(largeur: usize, hauteur: usize) -> Self {
-        let mut cells = Vec::with_capacity(hauteur);
-        for _ in 0..hauteur {
-            let mut ligne = Vec::with_capacity(largeur);
-            for _ in 0..largeur {
+    pub fn new(width: usize, height: usize) -> Self {
+        let mut cells = Vec::with_capacity(height);
+        for _ in 0..height {
+            let mut ligne = Vec::with_capacity(width);
+            for _ in 0..width {
                 ligne.push(Cell::new());
             }
             cells.push(ligne);
         }
-        Grid { cells, largeur, hauteur, initialized: false}
+        Grid { cells, width, height, initialized: false}
     }
 
     pub fn display(&self) {
-        print!("┌─");
-        for _ in 0..self.largeur {
-            print!("──");
-        }
-        println!("┐");
-        for y in 0..self.hauteur {
+        println!("╭{}╮", "─".repeat(2*self.width+1));
+        for row in &self.cells {
             print!("│ ");
-            for x in 0..self.largeur {
-                let cell = &self.cells[y][x];
+            for cell in row {
                 if cell.is_revealed {
                     print!("{} ", cell.adjacent_mines);
                 } else {
@@ -57,11 +52,7 @@ impl Grid {
             }
             println!("│");
         }
-        print!("└─");
-        for _ in 0..self.largeur {
-            print!("──");
-        }
-        println!("┘");
+        println!("╰{}╯", "─".repeat(2*self.width+1));
     }
 
 }
