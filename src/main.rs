@@ -60,10 +60,27 @@ fn main() -> io::Result<()> {
                     if !grid.is_generated() {
                         grid.generate((sel_x, sel_y));
                     }
-                    grid.reveal(sel_x, sel_y);
+
+                    if grid.reveal(sel_x, sel_y) {
+                        execute!(stdout, cursor::MoveTo(0, HEIGHT as u16 + 2))?;
+                        println!("Game Over! Press any key to exit...");
+                        let _ = event::read();
+                        break;
+                    } else if grid.is_cleared() {
+                        execute!(stdout, cursor::MoveTo(0, 0))?;
+                        print!("{}", grid);
+                        execute!(stdout, cursor::MoveTo(0, HEIGHT as u16 + 2))?;
+                        println!(
+                            "Congratulations! You cleared the minefield! Press any key to exit..."
+                        );
+                        let _ = event::read();
+                        break;
+                    }
                 }
                 KeyCode::Char('f') => {
-                    grid.toggle_flag(sel_x, sel_y);
+                    if grid.is_generated() {
+                        grid.toggle_flag(sel_x, sel_y);
+                    }
                 }
                 _ => {}
             }

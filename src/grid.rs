@@ -105,13 +105,12 @@ impl fmt::Display for Grid {
             write!(f, "│ ")?;
             for (x, cell) in row.iter().enumerate() {
                 if self.selected == (x, y) {
-                    // On affiche en inversé pour le sélecteur
                     write!(f, "{} ", cell.black().on_bright_white())?;
                 } else {
                     write!(f, "{} ", cell)?;
                 }
             }
-            write!(f, "│\r\n")?; // \r\n ici aussi
+            write!(f, "│\r\n")?;
         }
         write!(f, "╰{}╯\r\n", border)?;
         Ok(())
@@ -190,8 +189,12 @@ impl Grid {
         for r in 0..self.height {
             for c in 0..self.width {
                 let mut mine_count = 0;
-                for a in -1isize..2 {
-                    for b in -1isize..2 {
+                for a in -1..=1 {
+                    for b in -1..=1 {
+                        if a == 0 && b == 0 {
+                            continue;
+                        }
+
                         let nr = (r as isize) + a;
                         let nc = (c as isize) + b;
                         if nr >= 0
@@ -204,9 +207,6 @@ impl Grid {
                             }
                         }
                     }
-                }
-                if self.cells[r][c].cell_type == CellType::Mine {
-                    mine_count -= 1;
                 }
                 self.cells[r][c].adjacent_mines = mine_count;
             }
@@ -224,35 +224,99 @@ impl Grid {
         self.is_generated
     }
 
-    pub fn reveal(&mut self, x: usize, y: usize) {
+    pub fn reveal(&mut self, x: usize, y: usize) -> bool {
+        let cell = &self.cells[y][x];
+
+        if cell.revealed {
+            return self.chord(x, y);
+        }
+
+        self.actual_reveal(x, y)
+    }
+
+    fn actual_reveal(&mut self, x: usize, y: usize) -> bool {
         if self.cells[y][x].revealed || self.cells[y][x].flagged {
-            return;
+            return false;
         }
 
         self.cells[y][x].revealed = true;
 
         if self.cells[y][x].cell_type == CellType::Mine {
-            // Game over
-            return;
+            return true;
         }
 
         if self.cells[y][x].adjacent_mines == 0 {
-            for a in -1isize..2 {
-                for b in -1isize..2 {
-                    let nr = (y as isize) + a;
-                    let nc = (x as isize) + b;
-                    if nr >= 0 && nr < self.height as isize && nc >= 0 && nc < self.width as isize {
-                        self.reveal(nc as usize, nr as usize);
+            return self.reveal_neighbors(x, y);
+        }
+
+        false
+    }
+
+    fn chord(&mut self, x: usize, y: usize) -> bool {
+        let cell = &self.cells[y][x];
+
+        if cell.adjacent_mines > 0 && cell.adjacent_flags == cell.adjacent_mines {
+            return self.reveal_neighbors(x, y);
+        }
+        false
+    }
+
+    fn reveal_neighbors(&mut self, x: usize, y: usize) -> bool {
+        let mut exploded = false;
+        for a in -1..=1 {
+            for b in -1..=1 {
+                if a == 0 && b == 0 {
+                    continue;
+                }
+
+                let nr = (y as isize) + a;
+                let nc = (x as isize) + b;
+
+                if nr >= 0 && nr < self.height as isize && nc >= 0 && nc < self.width as isize {
+                    if self.actual_reveal(nc as usize, nr as usize) {
+                        exploded = true;
                     }
                 }
             }
         }
+        exploded
     }
 
     pub fn toggle_flag(&mut self, x: usize, y: usize) {
         if self.cells[y][x].revealed {
             return;
         }
-        self.cells[y][x].flagged = !self.cells[y][x].flagged;
+
+        let is_adding = !self.cells[y][x].flagged;
+        self.cells[y][x].flagged = is_adding;
+
+        for a in -1..=1 {
+            for b in -1..=1 {
+                if a == 0 && b == 0 {
+                    continue;
+                }
+
+                let nr = (y as isize) + a;
+                let nc = (x as isize) + b;
+                if nr >= 0 && nr < self.height as isize && nc >= 0 && nc < self.width as isize {
+                    if is_adding {
+                        self.cells[nr as usize][nc as usize].adjacent_flags += 1;
+                    } else {
+                        self.cells[nr as usize][nc as usize].adjacent_flags -= 1;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn is_cleared(&self) -> bool {
+        for row in &self.cells {
+            for cell in row {
+                if cell.cell_type == CellType::Empty && !cell.revealed {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
