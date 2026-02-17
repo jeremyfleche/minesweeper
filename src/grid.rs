@@ -2,7 +2,7 @@ use owo_colors::OwoColorize;
 use std::fmt::{self};
 
 const FIRST_CLICK_PROTECTION: usize = 1;
-const MINE_PERCENTAGE: usize = 30;
+const MINE_PERCENTAGE: usize = 20;
 
 #[derive(PartialEq)]
 enum CellType {
@@ -14,6 +14,7 @@ struct Cell {
     cell_type: CellType,
     revealed: bool,
     adjacent_mines: u8,
+    adjacent_flags: u8,
     flagged: bool,
 }
 
@@ -22,14 +23,17 @@ pub struct Grid {
     mine_count: usize,
     width: usize,
     height: usize,
+    selected: (usize, usize),
+    is_generated: bool,
 }
 
 impl Cell {
     fn new() -> Self {
         Self {
             cell_type: CellType::Empty,
-            revealed: true,
+            revealed: false,
             adjacent_mines: 0,
+            adjacent_flags: 0,
             flagged: false,
         }
     }
@@ -64,7 +68,7 @@ impl fmt::Display for Cell {
         }
 
         match self.cell_type {
-            CellType::Mine => write!(f, "☀"),
+            CellType::Mine => write!(f, "*"),
             CellType::Empty => write!(f, "{}", format_count(self.adjacent_mines)),
         }
     }
@@ -86,6 +90,8 @@ impl Grid {
             mine_count,
             width,
             height,
+            selected: (0, 0),
+            is_generated: false,
         }
     }
 }
@@ -93,20 +99,30 @@ impl Grid {
 impl fmt::Display for Grid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let border = "─".repeat(2 * self.width + 1);
-        writeln!(f, "╭{}╮", border)?;
-        for row in &self.cells {
+        write!(f, "╭{}╮\r\n", border)?;
+
+        for (y, row) in self.cells.iter().enumerate() {
             write!(f, "│ ")?;
-            for cell in row {
-                write!(f, "{} ", cell)?;
+            for (x, cell) in row.iter().enumerate() {
+                if self.selected == (x, y) {
+                    // On affiche en inversé pour le sélecteur
+                    write!(f, "{} ", cell.black().on_bright_white())?;
+                } else {
+                    write!(f, "{} ", cell)?;
+                }
             }
-            writeln!(f, "│")?;
+            write!(f, "│\r\n")?; // \r\n ici aussi
         }
-        write!(f, "╰{}╯\n", border)?;
+        write!(f, "╰{}╯\r\n", border)?;
         Ok(())
     }
 }
 
 impl Grid {
+    pub fn set_selected(&mut self, x: usize, y: usize) {
+        self.selected = (x, y);
+    }
+
     fn distance((x1, y1): (usize, usize), (x2, y2): (usize, usize)) -> usize {
         x1.abs_diff(x2).max(y1.abs_diff(y2))
     }
@@ -135,7 +151,7 @@ impl Grid {
             return;
         }
         let global_size = self.width * self.height;
-        let (safe_y, safe_x) = safe_spot;
+        let (safe_x, safe_y) = safe_spot;
 
         for i in 1..global_size {
             let j = rand::random_range(0..=i);
@@ -149,8 +165,8 @@ impl Grid {
             let r2 = j / self.width;
             let c2 = j % self.width;
 
-            if Self::distance((safe_y, safe_y), (r1, c1)) <= FIRST_CLICK_PROTECTION
-                || Self::distance((safe_y, safe_x), (r2, c2)) <= FIRST_CLICK_PROTECTION
+            if Self::distance((safe_x, safe_y), (c1, r1)) <= FIRST_CLICK_PROTECTION
+                || Self::distance((safe_x, safe_y), (c2, r2)) <= FIRST_CLICK_PROTECTION
             {
                 continue;
             }
@@ -201,5 +217,42 @@ impl Grid {
         self.place_mine(safe_spot);
         self.shuffle(safe_spot);
         self.update_mine_count();
+        self.is_generated = true;
+    }
+
+    pub fn is_generated(&self) -> bool {
+        self.is_generated
+    }
+
+    pub fn reveal(&mut self, x: usize, y: usize) {
+        if self.cells[y][x].revealed || self.cells[y][x].flagged {
+            return;
+        }
+
+        self.cells[y][x].revealed = true;
+
+        if self.cells[y][x].cell_type == CellType::Mine {
+            // Game over
+            return;
+        }
+
+        if self.cells[y][x].adjacent_mines == 0 {
+            for a in -1isize..2 {
+                for b in -1isize..2 {
+                    let nr = (y as isize) + a;
+                    let nc = (x as isize) + b;
+                    if nr >= 0 && nr < self.height as isize && nc >= 0 && nc < self.width as isize {
+                        self.reveal(nc as usize, nr as usize);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn toggle_flag(&mut self, x: usize, y: usize) {
+        if self.cells[y][x].revealed {
+            return;
+        }
+        self.cells[y][x].flagged = !self.cells[y][x].flagged;
     }
 }
